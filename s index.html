@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Sadia's Game - Level Up</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; touch-action: none; font-family: sans-serif; }
+        canvas { display: block; background: radial-gradient(circle, #1a2a6c, #b21f1f, #fdbb2d); }
+        
+        #uiScreen {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            text-align: center; color: white; z-index: 10; background: rgba(0, 0, 0, 0.85);
+            padding: 30px; border-radius: 20px; border: 2px solid #fff; width: 80%;
+        }
+        button {
+            padding: 15px 40px; font-size: 20px; background: #2ecc71; border: none;
+            color: white; border-radius: 50px; font-weight: bold; margin-top: 10px;
+        }
+        .level-text { color: #00f2fe; font-weight: bold; font-size: 24px; }
+    </style>
+</head>
+<body>
+
+<div id="uiScreen">
+    <h1 id="title">SADIA'S GAME</h1>
+    <p id="levelInfo" class="level-text">Level: 1</p>
+    <p>High Score: <span id="hiScoreLabel">0</span></p>
+    <button id="startBtn" onclick="startGame()">START GAME</button>
+</div>
+
+<canvas id="gameCanvas"></canvas>
+
+<script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+    const uiScreen = document.getElementById("uiScreen");
+    const titleText = document.getElementById("title");
+    const hiScoreLabel = document.getElementById("hiScoreLabel");
+    const levelInfo = document.getElementById("levelInfo");
+
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    let ballRadius = 12;
+    let x, y, dx, dy;
+    let paddleHeight = 15;
+    let paddleWidth = 140; // শুরুতে প্যাডেল বড় থাকবে (Easy)
+    let paddleX;
+    let score = 0;
+    let lives = 3;
+    let level = 1;
+    let gameRunning = false;
+
+    let highScore = localStorage.getItem("highScore") || 0;
+    hiScoreLabel.innerText = highScore;
+
+    function resetPositions() {
+        x = canvas.width / 2;
+        y = canvas.height - 100;
+        // লেভেল অনুযায়ী গতি সেট করা
+        let speed = 3 + level; 
+        dx = speed;
+        dy = -speed;
+        paddleX = (canvas.width - paddleWidth) / 2;
+    }
+
+    function playSound(freq, type = 'sine') {
+        try {
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            oscillator.type = type;
+            oscillator.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            gainNode.gain.setValueAtTime(0.05, audioCtx.currentTime);
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            oscillator.start();
+            oscillator.stop(audioCtx.currentTime + 0.1);
+        } catch(e) {}
+    }
+
+    function startGame() {
+        uiScreen.style.display = "none";
+        score = 0;
+        lives = 3;
+        level = 1;
+        paddleWidth = 140; // রিসেট প্যাডেল সাইজ
+        resetPositions();
+        gameRunning = true;
+        draw();
+    }
+
+    document.addEventListener("touchmove", (e) => {
+        if(gameRunning) {
+            let touchX = e.touches[0].clientX;
+            paddleX = touchX - paddleWidth / 2;
+            if(paddleX < 0) paddleX = 0;
+            if(paddleX + paddleWidth > canvas.width) paddleX = canvas.width - paddleWidth;
+        }
+    });
+
+    function drawUI() {
+        ctx.font = "bold 18px Arial";
+        ctx.fillStyle = "#fff";
+        ctx.fillText("Score: " + score, 20, 40);
+        ctx.fillText("Lives: ❤️ " + lives, 20, 70);
+        ctx.fillStyle = "#00f2fe";
+        ctx.fillText("Level: " + level, canvas.width - 100, 40);
+    }
+
+    function drawBall() {
+        ctx.beginPath();
+        ctx.arc(x, y, ballRadius, 0, Math.PI * 2);
+        ctx.fillStyle = "#fff";
+        ctx.fill();
+        ctx.closePath();
+    }
+
+    function drawPaddle() {
+        ctx.beginPath();
+        ctx.roundRect(paddleX, canvas.height - paddleHeight - 30, paddleWidth, paddleHeight, 10);
+        ctx.fillStyle = "#fdbb2d";
+        ctx.fill();
+        ctx.closePath();
+    }
+
+    function draw() {
+        if(!gameRunning) return;
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        drawBall();
+        drawPaddle();
+        drawUI();
+
+        if (x + dx > canvas.width - ballRadius || x + dx < ballRadius) {
+            dx = -dx;
+            playSound(400);
+        }
+        if (y + dy < ballRadius) {
+            dy = -dy;
+            playSound(450);
+        } 
+        else if (y + dy > canvas.height - ballRadius - 30) {
+            if (x > paddleX && x < paddleX + paddleWidth) {
+                dy = -dy;
+                score++;
+                playSound(600, 'square');
+
+                // লেভেল আপ লজিক (প্রতি ৫ পয়েন্টে)
+                if(score % 5 === 0) {
+                    level++;
+                    playSound(800, 'sine');
+                    // প্যাডেল ছোট করা (সর্বনিম্ন ৫০ পিক্সেল পর্যন্ত)
+                    if(paddleWidth > 60) paddleWidth -= 15;
+                    // গতি বাড়ানো
+                    dx *= 1.15;
+                    dy *= 1.15;
+                }
+            } else {
+                lives--;
+                playSound(150, 'sawtooth');
+                if (lives === 0) {
+                    gameOver();
+                } else {
+                    resetPositions();
+                }
+            }
+        }
+
+        x += dx;
+        y += dy;
+        requestAnimationFrame(draw);
+    }
+
+    function gameOver() {
+        gameRunning = false;
+        if (score > highScore) {
+            localStorage.setItem("highScore", score);
+            highScore = score;
+        }
+        titleText.innerText = "GAME OVER";
+        levelInfo.innerText = "Reached Level: " + level;
+        hiScoreLabel.innerText = highScore;
+        uiScreen.style.display = "block";
+        document.getElementById("startBtn").innerText = "PLAY AGAIN";
+    }
+</script>
+
+</body>
+</html>
